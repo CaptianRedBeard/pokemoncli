@@ -5,52 +5,19 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/CaptianRedBeard/pokedexcli/internal/pokeapi"
 )
 
-// cliCommand represents a command with a name, description, and a callback function.
-type cliCommand struct {
-	name        string
-	description string
-	callback    func() error
+type config struct {
+	pokeapiClient    pokeapi.Client
+	nextLocationsURL *string
+	prevLocationsURL *string
+	CaughtPokemon    map[string]pokeapi.Pokemon
 }
 
-// Command registry to hold command names and their corresponding functions.
-var commandRegistry = map[string]cliCommand{}
-
-// startRepl starts a Read-Eval-Print Loop (REPL) for the Pokedex application.
-func startRepl() {
+func startRepl(cfg *config) {
 	reader := bufio.NewScanner(os.Stdin)
-
-	// Register the help command
-	helpCommand := func () error {
-		fmt.Println("Welcome to the Pokedex!")
-		fmt.Println("Usage:")
-		fmt.Println("")
-		fmt.Println("help: Displays a help message")
-		fmt.Println("exit: Exit the Pokedex")
-		return nil
-	}
-
-	// Populate the command registry
-	commandRegistry["help"] = cliCommand{
-		name:        "help",
-		description: "Display help message",
-		callback:    helpCommand,
-	}
-
-	// Register the exit command
-	exitCommand := func() error {
-		fmt.Println("Closing the Pokedex... Goodbye!")
-		return nil
-	}
-
-	// Populate the command registry
-	commandRegistry["exit"] = cliCommand{
-		name:        "exit",
-		description: "Exit the Pokedex",
-		callback:    exitCommand,
-	}
-
 	for {
 		fmt.Print("Pokedex > ")
 		reader.Scan()
@@ -61,26 +28,79 @@ func startRepl() {
 		}
 
 		commandName := words[0]
+		args := []string{}
 
-		// Look up the command in the registry
+		if len(words) > 1 {
+			args = words[1:]
+		}
 
-		if command, found := commandRegistry[commandName]; found {
-			if err := command.callback(); err != nil {
-				fmt.Printf("Error while executing command '%s': %v\n", commandName, err)
+		command, exists := getCommands()[commandName]
+		if exists {
+			err := command.callback(cfg, args)
+			if err != nil {
+				fmt.Println(err)
 			}
-			// Check if the command is "exit" and return to break the loop
-			if commandName == "exit" {
-				return // Exit the startRepl function
-			}
+			continue
 		} else {
-			fmt.Printf("Unknown command: %s\n", commandName)
+			fmt.Println("Unknown command")
+			continue
 		}
 	}
 }
 
-// cleanInput takes a string input, converts it to lowercase, trims whitespace, and splits it into a slice of words.
 func cleanInput(text string) []string {
 	output := strings.ToLower(text)
 	words := strings.Fields(output)
 	return words
+}
+
+type cliCommand struct {
+	name        string
+	description string
+	callback    func(*config, []string) error
+}
+
+func getCommands() map[string]cliCommand {
+	return map[string]cliCommand{
+		"catch": {
+			name:        "catch",
+			description: "Attempts to catch a pokemon",
+			callback:    commandCatch,
+		},
+		"inspect": {
+			name:        "inspect",
+			description: "inspect caught pokemon values",
+			callback:    commandInspect,
+		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "lists caught pokemon",
+			callback:    commandPokedex,
+		},
+		"help": {
+			name:        "help",
+			description: "Displays a help message",
+			callback:    commandHelp,
+		},
+		"map": {
+			name:        "map",
+			description: "Get the next page of locations",
+			callback:    commandMapf,
+		},
+		"mapb": {
+			name:        "mapb",
+			description: "Get the previous page of locations",
+			callback:    commandMapb,
+		},
+		"explore": {
+			name:        "explore",
+			description: "Explore a location area to find Pokémon",
+			callback:    commandExplore,
+		},
+		"exit": {
+			name:        "exit",
+			description: "Exit the Pokedex",
+			callback:    commandExit,
+		},
+	}
 }
